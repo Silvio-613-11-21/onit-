@@ -1,10 +1,19 @@
 [project]
 name = "web-scram"
 version = "0.1.0"
-description = "Add your description here"
+description = "Selenium instruction runner and scheduler with FastAPI and SQLAlchemy"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = []
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi[standard]",
+    "selenium",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "python-dotenv",
+]
 
 [tool.setuptools.packages.find]
 include = ["database*", "src*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

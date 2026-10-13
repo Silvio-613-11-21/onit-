@@ -1,55 +1,64 @@
-from typing import List
-from typing import Optional
-from typing import Any
+from typing import List, Optional, Any
+from datetime import time, date
 
-from datetime import time
-from datetime import date
+from sqlalchemy import (
+    ForeignKey,
+    Index,
+    CheckConstraint,
+    String,
+    JSON,
+    Integer,
+    Time,
+    Date,
+    Boolean,
+)
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
-from sqlalchemy import ForeignKey
-from sqlalchemy import Index
-from sqlalchemy import CheckConstraint
-
-from sqlalchemy import String, JSON, Integer, Time, Date, Boolean
-
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import Mapped
-
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
 
 class Base(DeclarativeBase):
     type_annotation_map = {dict[str, Any]: JSON}
 
+
 class Instruction(Base):
     __tablename__ = "instruction"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    url: Mapped[str] = mapped_column(String)
-    steps: Mapped[dict[str, Any]] = mapped_column(JSON)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    steps: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     cookie: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
-    regular_actions:Mapped[List["RegularAction"]] = relationship(
+    regular_actions: Mapped[List["RegularAction"]] = relationship(
         back_populates="instruction", cascade="all, delete-orphan"
     )
 
-    single_actions:Mapped[List["SingleAction"]] = relationship(
+    single_actions: Mapped[List["SingleAction"]] = relationship(
         back_populates="instruction", cascade="all, delete-orphan"
-    ) 
+    )
 
     logs: Mapped[List["Log"]] = relationship(
-        back_populates="instruction",  cascade="all, delete-orphan"
+        back_populates="instruction", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:
-        return f"Instr(id={self.id!r}, link={self.url!r}, instr={self.steps!r} , cookie={self.cookie!r} )"
+        return (
+            f"Instr(id={self.id!r}, link={self.url!r}, "
+            f"instr={self.steps!r}, cookie={self.cookie!r})"
+        )
 
 
 class RegularAction(Base):
     __tablename__ = "regular_action"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    instr_id:Mapped[int] = mapped_column(ForeignKey("instruction.id"))
-    day:Mapped[int] = mapped_column(Integer, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    instr_id: Mapped[int] = mapped_column(
+        ForeignKey("instruction.id", ondelete="CASCADE"), nullable=False
+    )
+    day: Mapped[int] = mapped_column(Integer, nullable=False)
     time_start: Mapped[time] = mapped_column(Time, nullable=False)
     time_end: Mapped[time] = mapped_column(Time, nullable=False)
 
@@ -61,16 +70,23 @@ class RegularAction(Base):
     )
 
     def __repr__(self) -> str:
-        return f"RegularAction(id={self.id!r}, instr_id={self.instr_id!r}, day={self.day!r}, time_start={self.time_start!r}, time_end={self.time_end!r})"
+        return (
+            f"RegularAction(id={self.id!r}, instr_id={self.instr_id!r}, "
+            f"day={self.day!r}, time_start={self.time_start!r}, time_end={self.time_end!r})"
+        )
+
 
 class SingleAction(Base):
-    __tablename__  = "single_action"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    instr_id:Mapped[int] = mapped_column(ForeignKey("instruction.id"))
+    __tablename__ = "single_action"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    instr_id: Mapped[int] = mapped_column(
+        ForeignKey("instruction.id", ondelete="CASCADE"), nullable=False
+    )
     date: Mapped[date] = mapped_column(Date, nullable=False)
     time_start: Mapped[time] = mapped_column(Time, nullable=False)
     time_end: Mapped[time] = mapped_column(Time, nullable=False)
-    is_complete: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     instruction: Mapped["Instruction"] = relationship(back_populates="single_actions")
 
@@ -79,16 +95,24 @@ class SingleAction(Base):
     )
 
     def __repr__(self) -> str:
-        return f"SingleAction(id={self.id!r}, instr_id={self.instr_id!r}, date={self.date!r}, time_start={self.time_start!r}, time_end={self.time_end!r}, is_complete={self.is_complete!r})"
+        return (
+            f"SingleAction(id={self.id!r}, instr_id={self.instr_id!r}, "
+            f"date={self.date!r}, time_start={self.time_start!r}, "
+            f"time_end={self.time_end!r}, is_complete={self.is_complete!r})"
+        )
+
 
 class Log(Base):
     __tablename__ = "log"
-    id: Mapped[int] = mapped_column(primary_key=True)
-    instr_id:Mapped[int] = mapped_column(ForeignKey("instruction.id"))
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    instr_id: Mapped[int] = mapped_column(
+        ForeignKey("instruction.id", ondelete="CASCADE"), nullable=False
+    )
     date: Mapped[date] = mapped_column(Date, nullable=False)
     time: Mapped[time] = mapped_column(Time, nullable=False)
     is_success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    message: Mapped[Optional[str]] = mapped_column(String) 
+    message: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     instruction: Mapped["Instruction"] = relationship(back_populates="logs")
 
@@ -97,4 +121,8 @@ class Log(Base):
     )
 
     def __repr__(self) -> str:
-        return f"Log(id={self.id!r}, instr_id={self.instr_id!r}, date={self.date!r}, time={self.time!r}, is_success={self.is_success!r}, message={self.message!r})"
+        return (
+            f"Log(id={self.id!r}, instr_id={self.instr_id!r}, "
+            f"date={self.date!r}, time={self.time!r}, "
+            f"is_success={self.is_success!r}, message={self.message!r})"
+        )
