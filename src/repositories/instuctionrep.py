@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import select 
 
 from database.models import Instruction
-from src.models.instructionmodel import Instruction as Instr_
+from src.models.instructionmodel import Instruction 
 
 load_dotenv()  
 url = os.getenv("DATABASE_URL")
@@ -16,14 +16,15 @@ session = Session(engine)
 
 
 async def get_all_instr ():
-    return  select(Instruction)
+    res = session.execute( select(Instruction) )
+    return  res.scalar()
 
 
-def create_instr (instr: Instr_): 
+def create_instr (instr: Instruction): 
     with session:
         session.add(instr) 
         session.commit()
 
-    return instr 
+    # return instr 
 
 
