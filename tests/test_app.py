@@ -10,8 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 from selenium.webdriver.common.by import By
 
-from database.create_db import engine
-from database.models import Base
+from ..database.create_db import engine
+from ..database.models import Base
 from main import app
 from src.services.selenium_service import (
     find_element_sequentially_once,

@@ -4,6 +4,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
+import uvicorn
+import os
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
 from database.create_db import init_db
 from src.routes import *
 from src.services.scheduler_service import scheduler_service
@@ -60,3 +66,9 @@ app.include_router(log_router)
 async def root_redirect():
     """Перенаправление на Swagger UI."""
     return RedirectResponse(url="/docs")
+
+if __name__ == '__main__':
+    port = int(os.getenv("PORT", 8000)) 
+    host = os.getenv("HOST", "127.0.0.1")
+    print(f"DEBUG: Запуск на host={host!r}, port={port}") # repr покажет скрытые символы
+    uvicorn.run("main:app",  host=host, port=port, reload=True )
