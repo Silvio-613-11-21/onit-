@@ -1,5 +1,4 @@
-import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 from fastapi import HTTPException, status
 
 from src.repositories.instuctionrep import (
@@ -9,6 +8,8 @@ from src.repositories.instuctionrep import (
     update_instr,
     delete_instr,
 )
+from src.repositories.steprep import get_step_by_id
+from src.repositories.cookierep import get_cookie_by_id
 from src.models.instructionmodel import (
     InstructionCreate,
     InstructionUpdate,
@@ -17,8 +18,8 @@ from src.models.instructionmodel import (
 from src.services.selenium_service import (
     execute_instruction_sync,
     launch_instruction_in_background,
-    parse_cookie_file_content,
 )
+from src.controllers.cookiecontroller import parse_local_cookie_file
 
 
 async def get_all_instructions():
@@ -36,17 +37,44 @@ async def get_instruction(instr_id: int):
 
 
 async def create_instruction(instr: InstructionCreate):
+    step_obj = await get_step_by_id(instr.step_id)
+    if not step_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Набор шагов с id={instr.step_id} не найден в таблице step",
+        )
+    if instr.cookie_id is not None:
+        cookie_obj = await get_cookie_by_id(instr.cookie_id)
+        if not cookie_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Набор куки с id={instr.cookie_id} не найден в таблице cookie",
+            )
     return create_instr(instr)
 
 
 async def update_instruction(instr_id: int, instr_data: InstructionUpdate):
-    updated = update_instr(instr_id, instr_data)
-    if not updated:
+    existing = await get_instr_by_id(instr_id)
+    if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Инструкция с id={instr_id} не найдена",
         )
-    return updated
+    if instr_data.step_id is not None:
+        step_obj = await get_step_by_id(instr_data.step_id)
+        if not step_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Набор шагов с id={instr_data.step_id} не найден в таблице step",
+            )
+    if instr_data.cookie_id is not None:
+        cookie_obj = await get_cookie_by_id(instr_data.cookie_id)
+        if not cookie_obj:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Набор куки с id={instr_data.cookie_id} не найден в таблице cookie",
+            )
+    return update_instr(instr_id, instr_data)
 
 
 async def delete_instruction(instr_id: int) -> Dict[str, Any]:
@@ -83,6 +111,8 @@ async def run_instruction_by_id(
             "status": "started_in_background",
             "instr_id": instr.id,
             "url": instr.url,
+            "step_id": instr.step_id,
+            "cookie_id": instr.cookie_id,
             "time_end": str(run_params.time_end) if run_params.time_end else None,
             "hold_seconds": run_params.hold_seconds,
             "thread": thread_name,
@@ -97,14 +127,3 @@ async def run_instruction_by_id(
         hold_seconds=run_params.hold_seconds,
         source="manual_api_sync",
     )
-
-
-async def parse_local_cookie_file(file_path: str = "cookie.txt") -> Dict[str, str]:
-    if not os.path.exists(file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Файл '{file_path}' не найден",
-        )
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
-    return parse_cookie_file_content(content)

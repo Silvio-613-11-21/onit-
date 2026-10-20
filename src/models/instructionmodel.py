@@ -1,6 +1,8 @@
-from datetime import time
-from typing import Any, Optional
+from datetime import time as dt_time
+from typing import Any, List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
+
+CookiePayload = Union[List[dict[str, Any]], dict[str, Any]]
 
 
 class InstructionCreate(BaseModel):
@@ -9,40 +11,23 @@ class InstructionCreate(BaseModel):
         description="URL страницы, которую должен открыть Selenium",
         examples=["https://my.mts-link.ru/j/120328607/24334684457"],
     )
-    steps: dict[str, Any] = Field(
+    step_id: int = Field(
         ...,
-        description=(
-            "Шаги инструкции в формате JSON {ключ_поиска: действие}. "
-            "Ключ проверяется последовательно по [текст, id, name, тэг, class, xpath]. "
-            "Значение: 'click' для клика, 'clear' для очистки, 'submit'/'enter' для отправки, "
-            "'wait:N' для паузы, либо любая строка (или 'input:текст') для ввода текста."
-        ),
-        examples=[
-            {
-                "button.Button__btn___QAHvH.OdinControl__control___b1rRn": "click",
-                "Войти": "click",
-            }
-        ],
+        description="ID набора шагов из таблицы step",
+        examples=[1],
     )
-    cookie: Optional[dict[str, Any]] = Field(
+    cookie_id: Optional[int] = Field(
         default=None,
-        description="Куки в формате JSON {имя_куки: значение}",
-        examples=[
-            {
-                "_ga": "GA1.2.118533033.1789973637",
-                "access": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-            }
-        ],
+        description="ID набора куки из таблицы cookie (если куки не нужны — null)",
+        examples=[1],
     )
 
 
 class InstructionUpdate(BaseModel):
     url: Optional[str] = Field(default=None, description="Новый URL страницы")
-    steps: Optional[dict[str, Any]] = Field(
-        default=None, description="Новые шаги инструкции (JSON)"
-    )
-    cookie: Optional[dict[str, Any]] = Field(
-        default=None, description="Новые куки (JSON ключ-значение)"
+    step_id: Optional[int] = Field(default=None, description="Новый ID набора шагов")
+    cookie_id: Optional[int] = Field(
+        default=None, description="Новый ID набора куки"
     )
 
 
@@ -51,8 +36,16 @@ class InstructionResponse(BaseModel):
 
     id: int
     url: str
-    steps: dict[str, Any]
-    cookie: Optional[dict[str, Any]] = None
+    step_id: int
+    cookie_id: Optional[int] = None
+    steps: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Шаги из привязанной записи таблицы step",
+    )
+    cookie: Optional[CookiePayload] = Field(
+        default=None,
+        description="Куки из привязанной записи таблицы cookie",
+    )
 
 
 class InstructionRunRequest(BaseModel):
@@ -60,7 +53,7 @@ class InstructionRunRequest(BaseModel):
         default=True,
         description="Запустить в фоновом потоке (True) или дождаться завершения в запросе (False)",
     )
-    time_end: Optional[time] = Field(
+    time_end: Optional[dt_time] = Field(
         default=None,
         description="Удерживать браузер открытым до указанного времени (ЧЧ:ММ:СС)",
         examples=["15:30:00"],

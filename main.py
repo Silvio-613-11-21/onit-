@@ -6,6 +6,8 @@ from fastapi.responses import RedirectResponse
 
 from database.create_db import init_db
 from src.routes import (
+    step_router,
+    cookie_router,
     instruction_router,
     regular_action_router,
     single_action_router,
@@ -39,10 +41,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="OnIt — Автоматизация браузера по расписанию (Selenium + FastAPI + PostgreSQL)",
     description=(
-        "Сервис управления инструкциями Selenium, регулярным (`regular_action`) и "
+        "Сервис управления шаблонами шагов (`step`), профилями куки (`cookie`), "
+        "инструкциями (`instruction`), регулярным (`regular_action`) и "
         "нерегулярным (`single_action`) расписанием и логами выполнения (`log`)."
     ),
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 
@@ -54,6 +57,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(step_router)
+app.include_router(cookie_router)
 app.include_router(instruction_router)
 app.include_router(regular_action_router)
 app.include_router(single_action_router)

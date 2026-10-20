@@ -6,6 +6,7 @@ from src.services.selenium_service import (
     perform_step_action,
     add_cookies_to_driver,
     parse_cookie_file_content,
+    parse_cookie_file_to_selenium_list,
     get_active_sessions,
     stop_active_session,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "perform_step_action",
     "add_cookies_to_driver",
     "parse_cookie_file_content",
+    "parse_cookie_file_to_selenium_list",
     "get_active_sessions",
     "stop_active_session",
     "scheduler_service",

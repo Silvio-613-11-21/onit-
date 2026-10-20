@@ -1,3 +1,20 @@
+from src.controllers.stepcontroller import (
+    list_steps,
+    get_step,
+    add_step,
+    edit_step,
+    remove_step,
+)
+from src.controllers.cookiecontroller import (
+    list_cookies,
+    get_cookie,
+    add_cookie,
+    edit_cookie,
+    remove_cookie,
+    parse_local_cookie_file,
+    parse_local_cookie_file_selenium,
+    create_cookie_from_file,
+)
 from src.controllers.instructioncontroller import (
     get_all_instructions,
     get_instruction,
@@ -5,7 +22,6 @@ from src.controllers.instructioncontroller import (
     update_instruction,
     delete_instruction,
     run_instruction_by_id,
-    parse_local_cookie_file,
 )
 from src.controllers.regularactioncontroller import (
     list_regular_actions,

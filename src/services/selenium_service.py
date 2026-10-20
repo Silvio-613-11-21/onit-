@@ -4,7 +4,7 @@ import uuid
 import threading
 import logging
 from datetime import datetime, time as dt_time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 from selenium import webdriver
@@ -25,6 +25,8 @@ from src.models.logmodel import LogCreate
 from src.repositories.logrep import create_log, update_log_message
 
 logger = logging.getLogger(__name__)
+
+CookieDataInput = Union[List[Dict[str, Any]], Dict[str, Any]]
 
 # Реестр активных сессий браузера (для мониторинга и управления через Swagger UI)
 _active_sessions_lock = threading.Lock()
@@ -108,13 +110,11 @@ def find_element_sequentially_once(
 
     # 1. ТЕКСТ (точный текст ссылки, точный текст элемента, частичный текст элемента, частичный текст ссылки)
     try:
-        # 1a. Точный текст ссылки (By.LINK_TEXT)
         els = driver.find_elements(By.LINK_TEXT, key)
         el = _pick_best_element(els, require_displayed=True)
         if el is not None:
             return el, "текст (LINK_TEXT)"
 
-        # 1b. Точный текст любого видимого элемента через XPath
         escaped = _xpath_literal(key)
         non_meta = (
             "not(self::script) and not(self::style) and not(self::noscript) "
@@ -126,7 +126,6 @@ def find_element_sequentially_once(
         if el is not None:
             return el, "текст (точное совпадение)"
 
-        # 1c. Частичный текст видимого элемента
         if not key.startswith(("/", "./", "(//")):
             partial_text_xpath = (
                 f"//*[{non_meta} and contains(normalize-space(text()), {escaped})]"
@@ -136,7 +135,6 @@ def find_element_sequentially_once(
             if el is not None:
                 return el, "текст (частичное совпадение)"
 
-            # 1d. Частичный текст ссылки (By.PARTIAL_LINK_TEXT)
             els = driver.find_elements(By.PARTIAL_LINK_TEXT, key)
             el = _pick_best_element(els, require_displayed=True)
             if el is not None:
@@ -180,16 +178,16 @@ def find_element_sequentially_once(
             if el is not None:
                 return el, "class"
         elif " " in key and not key.startswith("/"):
-            # Несколько классов через пробел: "cls1 cls2" -> ".cls1.cls2"
             parts = [p.lstrip(".") for p in key.split() if p.strip()]
-            if parts and all(p.replace("-", "").replace("_", "").isalnum() for p in parts):
+            if parts and all(
+                p.replace("-", "").replace("_", "").isalnum() for p in parts
+            ):
                 css_cls = "." + ".".join(parts)
                 els = driver.find_elements(By.CSS_SELECTOR, css_cls)
                 el = _pick_best_element(els)
                 if el is not None:
                     return el, "class (составной)"
         if "." in key and not key.startswith("/"):
-            # Поддержка селекторов вида "button.Button__btn___QAHvH.OdinControl__control___b1rRn"
             els = driver.find_elements(By.CSS_SELECTOR, key)
             el = _pick_best_element(els)
             if el is not None:
@@ -301,15 +299,67 @@ def perform_step_action(
     return f"send_keys('{text_to_send}')"
 
 
+def _normalize_cookies_list(cookies: CookieDataInput) -> List[Dict[str, Any]]:
+    """
+    Приводит куки из БД (либо список объектов [{'name', 'value', 'domain', 'path'}],
+    либо словарь {'name': 'value'}) к единому списку словарей для driver.add_cookie().
+    """
+    normalized: List[Dict[str, Any]] = []
+    if isinstance(cookies, list):
+        for item in cookies:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            value = item.get("value")
+            if not name or value is None:
+                continue
+            cookie_dict: Dict[str, Any] = {
+                "name": str(name),
+                "value": str(value),
+                "path": str(item.get("path") or "/"),
+            }
+            if item.get("domain"):
+                cookie_dict["domain"] = str(item["domain"])
+            if "secure" in item and isinstance(item["secure"], bool):
+                cookie_dict["secure"] = item["secure"]
+            if "httpOnly" in item and isinstance(item["httpOnly"], bool):
+                cookie_dict["httpOnly"] = item["httpOnly"]
+            normalized.append(cookie_dict)
+    elif isinstance(cookies, dict):
+        for name, val in cookies.items():
+            if val is None:
+                continue
+            if isinstance(val, dict):
+                cookie_dict = {
+                    "name": str(name),
+                    "value": str(val.get("value", "")),
+                    "path": str(val.get("path") or "/"),
+                }
+                if val.get("domain"):
+                    cookie_dict["domain"] = str(val["domain"])
+            else:
+                cookie_dict = {
+                    "name": str(name),
+                    "value": str(val),
+                    "path": "/",
+                }
+            normalized.append(cookie_dict)
+    return normalized
+
+
 def add_cookies_to_driver(
-    driver: webdriver.Remote, url: str, cookies: Optional[Dict[str, Any]]
+    driver: webdriver.Remote, url: str, cookies: Optional[CookieDataInput]
 ) -> int:
     """
-    Добавляет куки из словаря JSON {ключ: значение} в открытый браузер Selenium
-    и обновляет страницу.
+    Добавляет куки (из массива объектов Selenium или словаря {ключ: значение})
+    в открытый браузер Selenium и обновляет страницу.
     Возвращает количество успешно добавленных куки.
     """
-    if not cookies or not isinstance(cookies, dict):
+    if not cookies:
+        return 0
+
+    cookie_items = _normalize_cookies_list(cookies)
+    if not cookie_items:
         return 0
 
     added_count = 0
@@ -320,30 +370,11 @@ def add_cookies_to_driver(
     if len(host_parts) >= 2:
         parent_domain = "." + ".".join(host_parts[-2:])
 
-    for name, val in cookies.items():
-        if val is None:
-            continue
-
-        if isinstance(val, dict):
-            cookie_dict = {
-                "name": str(name),
-                "value": str(val.get("value", "")),
-                "path": str(val.get("path", "/")),
-            }
-            if val.get("domain"):
-                cookie_dict["domain"] = str(val["domain"])
-        else:
-            cookie_dict = {
-                "name": str(name),
-                "value": str(val),
-                "path": "/",
-            }
-
+    for cookie_dict in cookie_items:
+        name = cookie_dict.get("name", "")
         try:
             driver.add_cookie(cookie_dict)
             added_count += 1
-            # Если домен является поддоменом (например, my.mts-link.ru),
-            # также пробуем добавить куку для родительского домена (.mts-link.ru)
             if (
                 parent_domain
                 and "domain" not in cookie_dict
@@ -354,7 +385,6 @@ def add_cookies_to_driver(
                 except WebDriverException:
                     pass
         except WebDriverException as exc:
-            # Если не удалось добавить с указанным domain, пробуем без него
             if "domain" in cookie_dict:
                 fallback_cookie = {
                     k: v for k, v in cookie_dict.items() if k != "domain"
@@ -385,7 +415,6 @@ def create_chrome_driver() -> webdriver.Chrome:
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    # Автоматически разрешать доступ к микрофону/камере (полезно для вебинаров MTS Link и др.)
     options.add_argument("--use-fake-ui-for-media-stream")
     options.add_experimental_option(
         "prefs",
@@ -398,22 +427,52 @@ def create_chrome_driver() -> webdriver.Chrome:
     return webdriver.Chrome(options=options)
 
 
-def parse_cookie_file_content(content: str) -> Dict[str, str]:
+def parse_cookie_file_to_selenium_list(content: str) -> List[Dict[str, str]]:
     """
-    Парсит содержимое файла формата cookie.txt (разделенного табуляцией, как в s.py)
-    в словарь JSON {name: value} для сохранения в БД.
+    Парсит содержимое файла cookie.txt (разделенного табуляцией, как в s.py)
+    в список объектов Selenium [{'name', 'value', 'domain', 'path'}].
     """
-    result: Dict[str, str] = {}
+    result: List[Dict[str, str]] = []
     for line in content.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         parts = stripped.split("\t")
-        if len(parts) >= 2:
+        if len(parts) >= 4:
+            name = parts[0].strip()
+            value = parts[1].strip()
+            domain = parts[2].strip()
+            path = parts[3].strip() or "/"
+            if name:
+                result.append(
+                    {
+                        "name": name,
+                        "value": value,
+                        "domain": domain,
+                        "path": path,
+                    }
+                )
+        elif len(parts) >= 2:
             name = parts[0].strip()
             value = parts[1].strip()
             if name:
-                result[name] = value
+                result.append(
+                    {
+                        "name": name,
+                        "value": value,
+                        "path": "/",
+                    }
+                )
+    return result
+
+
+def parse_cookie_file_content(content: str) -> Dict[str, str]:
+    """
+    Парсит содержимое файла формата cookie.txt в простой словарь {name: value}.
+    """
+    result: Dict[str, str] = {}
+    for item in parse_cookie_file_to_selenium_list(content):
+        result[item["name"]] = item["value"]
     return result
 
 
@@ -421,7 +480,7 @@ def execute_instruction_sync(
     instr_id: int,
     url: str,
     steps: Dict[str, Any],
-    cookie: Optional[Dict[str, Any]] = None,
+    cookie: Optional[CookieDataInput] = None,
     time_end: Optional[dt_time] = None,
     hold_seconds: int = 0,
     source: str = "manual",
@@ -484,7 +543,6 @@ def execute_instruction_sync(
                 if stop_event.is_set():
                     break
 
-                # Специальный шаг паузы {"wait": 5} / {"sleep": 3}
                 if selector_key.strip().lower() in ("wait", "sleep", "pause"):
                     try:
                         pause_sec = float(action_val)
@@ -509,12 +567,13 @@ def execute_instruction_sync(
             f"Шаги выполнены ({len(executed_steps)}): {steps_summary}."
         )
 
-        # Создаем запись в таблице логов сразу после выполнения шагов
         holding_msg = base_msg
         if time_end and datetime.now().time() < time_end:
             holding_msg = f"{base_msg} Браузер удерживается открытым до {time_end}."
         elif hold_seconds > 0:
-            holding_msg = f"{base_msg} Браузер удерживается открытым на {hold_seconds} сек."
+            holding_msg = (
+                f"{base_msg} Браузер удерживается открытым на {hold_seconds} сек."
+            )
 
         db_log = create_log(
             LogCreate(
@@ -566,7 +625,9 @@ def execute_instruction_sync(
         }
 
     except Exception as exc:
-        err_msg = f"[{source}] Ошибка при выполнении инструкции #{instr_id} ({url}): {exc}"
+        err_msg = (
+            f"[{source}] Ошибка при выполнении инструкции #{instr_id} ({url}): {exc}"
+        )
         logger.exception(err_msg)
         if log_record_id is not None:
             update_log_message(log_record_id, err_msg, is_success=False)
@@ -602,7 +663,7 @@ def launch_instruction_in_background(
     instr_id: int,
     url: str,
     steps: Dict[str, Any],
-    cookie: Optional[Dict[str, Any]] = None,
+    cookie: Optional[CookieDataInput] = None,
     time_end: Optional[dt_time] = None,
     hold_seconds: int = 0,
     source: str = "scheduler",

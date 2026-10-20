@@ -1,3 +1,17 @@
+from src.repositories.steprep import (
+    get_all_steps,
+    get_step_by_id,
+    create_step,
+    update_step,
+    delete_step,
+)
+from src.repositories.cookierep import (
+    get_all_cookies,
+    get_cookie_by_id,
+    create_cookie,
+    update_cookie,
+    delete_cookie,
+)
 from src.repositories.instuctionrep import (
     get_all_instr,
     get_instr_by_id,

@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Generator
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker, Session
 
 try:
@@ -32,7 +32,20 @@ SessionLocal = sessionmaker(
 
 
 def init_db() -> None:
-    """Создает все таблицы в базе данных."""
+    """
+    Создает все таблицы в базе данных.
+    Если в БД осталась старая схема таблицы instruction (без колонки step_id),
+    автоматически пересоздает таблицы под новую нормализованную схему.
+    """
+    inspector = inspect(engine)
+    if inspector.has_table("instruction"):
+        col_names = {col["name"] for col in inspector.get_columns("instruction")}
+        if "step_id" not in col_names:
+            logger.info(
+                "Обнаружена старая схема таблицы instruction (без step_id). Пересоздание таблиц..."
+            )
+            Base.metadata.drop_all(bind=engine)
+
     Base.metadata.create_all(bind=engine)
 
 

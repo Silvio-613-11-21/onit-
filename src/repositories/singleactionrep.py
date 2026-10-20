@@ -4,7 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from database.create_db import SessionLocal
-from database.models import SingleAction as SingleActionORM
+from database.models import (
+    SingleAction as SingleActionORM,
+    Instruction as InstructionORM,
+)
 from src.models.singleactionmodel import SingleActionCreate, SingleActionUpdate
 
 
@@ -74,12 +77,21 @@ def delete_single_action(action_id: int) -> bool:
         return True
 
 
-def get_due_single_actions(current_date: date, current_time: time) -> List[SingleActionORM]:
+def get_due_single_actions(
+    current_date: date, current_time: time
+) -> List[SingleActionORM]:
     """Возвращает невыполненные разовые инструкции на текущую дату и время."""
     with SessionLocal() as session:
         stmt = (
             select(SingleActionORM)
-            .options(joinedload(SingleActionORM.instruction))
+            .options(
+                joinedload(SingleActionORM.instruction).joinedload(
+                    InstructionORM.step_rel
+                ),
+                joinedload(SingleActionORM.instruction).joinedload(
+                    InstructionORM.cookie_rel
+                ),
+            )
             .where(
                 SingleActionORM.is_complete.is_(False),
                 SingleActionORM.date == current_date,
@@ -89,10 +101,12 @@ def get_due_single_actions(current_date: date, current_time: time) -> List[Singl
             .order_by(SingleActionORM.time_start)
         )
         res = session.execute(stmt)
-        return list(res.scalars().all())
+        return list(res.scalars().unique().all())
 
 
-def mark_single_action_complete(action_id: int, is_complete: bool = True) -> Optional[SingleActionORM]:
+def mark_single_action_complete(
+    action_id: int, is_complete: bool = True
+) -> Optional[SingleActionORM]:
     with SessionLocal() as session:
         db_action = session.get(SingleActionORM, action_id)
         if not db_action:

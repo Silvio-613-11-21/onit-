@@ -8,7 +8,6 @@ from src.controllers.instructioncontroller import (
     update_instruction,
     delete_instruction,
     run_instruction_by_id,
-    parse_local_cookie_file,
 )
 from src.models.instructionmodel import (
     InstructionCreate,
@@ -16,7 +15,6 @@ from src.models.instructionmodel import (
     InstructionResponse,
     InstructionRunRequest,
 )
-from src.services.selenium_service import parse_cookie_file_content
 
 router = APIRouter(tags=["Instructions (Инструкции)"])
 
@@ -24,7 +22,7 @@ router = APIRouter(tags=["Instructions (Инструкции)"])
 @router.get(
     "/instructions",
     response_model=List[InstructionResponse],
-    summary="Получить все инструкции",
+    summary="Получить все инструкции (вместе с привязанными steps и cookie)",
 )
 async def get_all_instr():
     return await get_all_instructions()
@@ -43,7 +41,7 @@ async def get_instr(instr_id: int):
     "/create_instruction",
     response_model=InstructionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Создать новую инструкцию",
+    summary="Создать новую инструкцию (связка url + step_id + cookie_id)",
 )
 async def create_instr_(instr: InstructionCreate):
     return await create_instruction(instr)
@@ -80,9 +78,10 @@ async def delete_instr_(instr_id: int):
     "/instructions/{instr_id}/run",
     summary="Запустить выполнение инструкции вручную через Selenium",
     description=(
-        "Открывает браузер Selenium, переходит по URL инструкции, добавляет куки из БД (если есть), "
-        "последовательно ищет элементы по [текст, id, name, тэг, class, xpath], выполняет действия "
-        "и удерживает браузер до time_end (или hold_seconds), после чего сохраняет запись в лог."
+        "Открывает браузер Selenium, переходит по URL инструкции, добавляет куки из привязанной записи "
+        "таблицы `cookie` (если есть), последовательно ищет элементы для шагов из таблицы `step` "
+        "по [текст, id, name, тэг, class, xpath], выполняет действия и удерживает браузер до time_end "
+        "(или hold_seconds), после чего сохраняет запись в лог."
     ),
 )
 async def run_instr(
@@ -90,22 +89,3 @@ async def run_instr(
     run_params: InstructionRunRequest = Body(default_factory=InstructionRunRequest),
 ) -> Dict[str, Any]:
     return await run_instruction_by_id(instr_id, run_params)
-
-
-@router.get(
-    "/cookies/from-file",
-    summary="Спарсить локальный файл cookie.txt в JSON ключ-значение",
-    description="Читает файл cookie.txt и возвращает JSON словарь {name: value}, готовый для вставки в поле cookie инструкции.",
-)
-async def get_cookies_from_file(file_path: str = "cookie.txt") -> Dict[str, str]:
-    return await parse_local_cookie_file(file_path)
-
-
-@router.post(
-    "/cookies/parse-text",
-    summary="Преобразовать текст куки (tab-separated) в JSON ключ-значение",
-)
-async def parse_cookies_text(
-    raw_text: str = Body(..., media_type="text/plain", description="Строки из cookie.txt")
-) -> Dict[str, str]:
-    return parse_cookie_file_content(raw_text)

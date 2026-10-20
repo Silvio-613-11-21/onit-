@@ -1,3 +1,16 @@
+from src.models.stepmodel import (
+    StepModel,
+    StepCreate,
+    StepUpdate,
+    StepResponse,
+)
+from src.models.cookiemodel import (
+    CookieModel,
+    CookieCreate,
+    CookieUpdate,
+    CookieResponse,
+    CookiePayload,
+)
 from src.models.instructionmodel import (
     Instruction,
     InstructionCreate,
@@ -24,6 +37,15 @@ from src.models.logmodel import (
 )
 
 __all__ = [
+    "StepModel",
+    "StepCreate",
+    "StepUpdate",
+    "StepResponse",
+    "CookieModel",
+    "CookieCreate",
+    "CookieUpdate",
+    "CookieResponse",
+    "CookiePayload",
     "Instruction",
     "InstructionCreate",
     "InstructionUpdate",

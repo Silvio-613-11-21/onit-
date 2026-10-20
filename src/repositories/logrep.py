@@ -80,4 +80,4 @@ def clear_logs(instr_id: Optional[int] = None) -> int:
             stmt = stmt.where(LogORM.instr_id == instr_id)
         res = session.execute(stmt)
         session.commit()
-        return res.rowcount or 0
+        return int(getattr(res, "rowcount", 0) or 0)

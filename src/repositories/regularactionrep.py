@@ -4,7 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
 from database.create_db import SessionLocal
-from database.models import RegularAction as RegularActionORM
+from database.models import (
+    RegularAction as RegularActionORM,
+    Instruction as InstructionORM,
+)
 from src.models.regularactionmodel import RegularActionCreate, RegularActionUpdate
 
 
@@ -70,12 +73,21 @@ def delete_regular_action(action_id: int) -> bool:
         return True
 
 
-def get_due_regular_actions(current_day: int, current_time: time) -> List[RegularActionORM]:
+def get_due_regular_actions(
+    current_day: int, current_time: time
+) -> List[RegularActionORM]:
     """Возвращает регулярные инструкции, у которых день недели и интервал времени совпадают с системными."""
     with SessionLocal() as session:
         stmt = (
             select(RegularActionORM)
-            .options(joinedload(RegularActionORM.instruction))
+            .options(
+                joinedload(RegularActionORM.instruction).joinedload(
+                    InstructionORM.step_rel
+                ),
+                joinedload(RegularActionORM.instruction).joinedload(
+                    InstructionORM.cookie_rel
+                ),
+            )
             .where(
                 RegularActionORM.day == current_day,
                 RegularActionORM.time_start <= current_time,
@@ -84,4 +96,4 @@ def get_due_regular_actions(current_day: int, current_time: time) -> List[Regula
             .order_by(RegularActionORM.time_start)
         )
         res = session.execute(stmt)
-        return list(res.scalars().all())
+        return list(res.scalars().unique().all())

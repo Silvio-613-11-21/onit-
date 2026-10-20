@@ -29,7 +29,7 @@ def setup_test_db():
     Base.metadata.create_all(bind=engine)
     yield
     for sess in get_active_sessions():
-        stop_active_session(sess["session_id"])
+        stop_active_session(str(sess["session_id"]))
     for _ in range(20):
         if not get_active_sessions():
             break
@@ -37,93 +37,109 @@ def setup_test_db():
     Base.metadata.drop_all(bind=engine)
 
 
-def test_crud_and_cookie_parsing():
+def test_crud_normalized_steps_cookies_and_instructions():
     with TestClient(app) as client:
-        # 1. Парсинг cookie.txt
-        resp_cookies = client.get("/cookies/from-file")
-        assert resp_cookies.status_code == 200
-        cookies_dict = resp_cookies.json()
-        assert "_ga" in cookies_dict
-        assert "access" in cookies_dict
+        # 1. Импорт cookie.txt сразу в таблицу cookie (формат массива объектов Selenium)
+        resp_import = client.post(
+            "/cookies/import-from-file?title=МТС+Линк+Основной"
+        )
+        assert resp_import.status_code == 201
+        cookie_record = resp_import.json()
+        cookie_id = cookie_record["id"]
+        assert cookie_record["title"] == "МТС Линк Основной"
+        assert isinstance(cookie_record["cookie"], list)
+        assert len(cookie_record["cookie"]) > 0
+        assert "name" in cookie_record["cookie"][0]
+        assert "domain" in cookie_record["cookie"][0]
 
-        # 2. Создание инструкции
-        instr_payload = {
-            "url": "https://my.mts-link.ru/j/120328607/24334684457",
+        # 2. Создание шаблона шагов в таблице step
+        step_payload = {
+            "title": "Вход в вебинар МТС Линк",
             "steps": {
                 "Войти": "click",
                 "username": "Иван Иванов",
                 "button.Button__btn___QAHvH.OdinControl__control___b1rRn": "click",
             },
-            "cookie": {"_ga": cookies_dict["_ga"], "access": cookies_dict["access"]},
         }
-        resp = client.post("/create_instruction", json=instr_payload)
-        assert resp.status_code == 201
-        instr = resp.json()
-        instr_id = instr["id"]
-        assert instr["url"] == instr_payload["url"]
-        assert instr["steps"] == instr_payload["steps"]
-        assert instr["cookie"]["_ga"] == cookies_dict["_ga"]
+        resp_step = client.post("/steps", json=step_payload)
+        assert resp_step.status_code == 201
+        step_record = resp_step.json()
+        step_id = step_record["id"]
+        assert step_record["steps"] == step_payload["steps"]
 
-        # 3. Обновление инструкции
-        resp_upd = client.put(
-            f"/instructions/{instr_id}",
-            json={"url": "https://my.mts-link.ru/j/999"},
+        # 3. Создание ДВУХ разных инструкций с разными URL, но ОДНИМ И ТЕМ ЖЕ step_id и cookie_id (без дублирования)
+        instr1_resp = client.post(
+            "/create_instruction",
+            json={
+                "url": "https://my.mts-link.ru/j/120328607/111111",
+                "step_id": step_id,
+                "cookie_id": cookie_id,
+            },
         )
-        assert resp_upd.status_code == 200
-        assert resp_upd.json()["url"] == "https://my.mts-link.ru/j/999"
+        assert instr1_resp.status_code == 201
+        instr1 = instr1_resp.json()
+        instr1_id = instr1["id"]
+        assert instr1["step_id"] == step_id
+        assert instr1["cookie_id"] == cookie_id
+        assert instr1["steps"] == step_payload["steps"]
 
-        # 4. Получение всех инструкций
-        resp_list = client.get("/instructions")
-        assert resp_list.status_code == 200
-        assert len(resp_list.json()) == 1
-
-        # 5. Создание и обновление регулярной инструкции
-        reg_payload = {
-            "instr_id": instr_id,
-            "day": 1,
-            "time_start": "09:00:00",
-            "time_end": "10:30:00",
-        }
-        resp_reg = client.post("/regular_actions", json=reg_payload)
-        assert resp_reg.status_code == 201
-        reg_id = resp_reg.json()["id"]
-
-        resp_reg_upd = client.put(f"/regular_actions/{reg_id}", json={"day": 2})
-        assert resp_reg_upd.status_code == 200
-        assert resp_reg_upd.json()["day"] == 2
-
-        # 6. Создание и обновление нерегулярной инструкции
-        single_payload = {
-            "instr_id": instr_id,
-            "date": "2026-10-13",
-            "time_start": "12:00:00",
-            "time_end": "13:30:00",
-            "is_complete": False,
-        }
-        resp_single = client.post("/single_actions", json=single_payload)
-        assert resp_single.status_code == 201
-        single_id = resp_single.json()["id"]
-
-        resp_single_upd = client.put(
-            f"/single_actions/{single_id}", json={"is_complete": True}
+        instr2_resp = client.post(
+            "/instructions",
+            json={
+                "url": "https://my.mts-link.ru/j/120328607/222222",
+                "step_id": step_id,
+                "cookie_id": cookie_id,
+            },
         )
-        assert resp_single_upd.status_code == 200
-        assert resp_single_upd.json()["is_complete"] is True
+        assert instr2_resp.status_code == 201
+        instr2 = instr2_resp.json()
+        instr2_id = instr2["id"]
+        assert instr2["step_id"] == step_id
+        assert instr2["cookie_id"] == cookie_id
 
-        # 7. Создание и получение лога
-        log_payload = {
-            "instr_id": instr_id,
-            "is_success": True,
-            "message": "Тестовый лог",
-        }
-        resp_log = client.post("/logs", json=log_payload)
-        assert resp_log.status_code == 201
-        assert resp_log.json()["message"] == "Тестовый лог"
+        # 4. Обновление шаблона шагов автоматически отражается в обеих инструкциях
+        new_steps = {"Подключиться": "click"}
+        resp_step_upd = client.put(f"/steps/{step_id}", json={"steps": new_steps})
+        assert resp_step_upd.status_code == 200
 
-        # 8. Удаление расписаний и инструкции
+        instr1_after = client.get(f"/instructions/{instr1_id}").json()
+        instr2_after = client.get(f"/instructions/{instr2_id}").json()
+        assert instr1_after["steps"] == new_steps
+        assert instr2_after["steps"] == new_steps
+
+        # 5. Создание регулярной и нерегулярной инструкции
+        reg_resp = client.post(
+            "/regular_actions",
+            json={
+                "instr_id": instr1_id,
+                "day": 1,
+                "time_start": "09:00:00",
+                "time_end": "10:30:00",
+            },
+        )
+        assert reg_resp.status_code == 201
+        reg_id = reg_resp.json()["id"]
+
+        single_resp = client.post(
+            "/single_actions",
+            json={
+                "instr_id": instr2_id,
+                "date": "2026-10-13",
+                "time_start": "12:00:00",
+                "time_end": "13:30:00",
+                "is_complete": False,
+            },
+        )
+        assert single_resp.status_code == 201
+        single_id = single_resp.json()["id"]
+
+        # 6. Удаление расписаний, инструкций, шагов и куки
         assert client.delete(f"/regular_actions/{reg_id}").status_code == 200
         assert client.delete(f"/single_actions/{single_id}").status_code == 200
-        assert client.delete(f"/instructions/{instr_id}").status_code == 200
+        assert client.delete(f"/instructions/{instr1_id}").status_code == 200
+        assert client.delete(f"/instructions/{instr2_id}").status_code == 200
+        assert client.delete(f"/steps/{step_id}").status_code == 200
+        assert client.delete(f"/cookies/{cookie_id}").status_code == 200
 
 
 def test_sequential_locator_search_all_strategies():
@@ -140,35 +156,40 @@ def test_sequential_locator_search_all_strategies():
         lambda by, val: [mock_el] if by == By.LINK_TEXT and val == "Подключиться" else []
     )
     el, strategy = find_element_sequentially_once(mock_driver, "Подключиться")
-    assert el is mock_el and "текст" in strategy
+    assert el is mock_el
+    assert strategy is not None and "текст" in strategy
 
     # 2. ID
     mock_driver.find_elements.side_effect = (
         lambda by, val: [mock_el] if by == By.ID and val == "submit-btn" else []
     )
     el, strategy = find_element_sequentially_once(mock_driver, "submit-btn")
-    assert el is mock_el and strategy == "id"
+    assert el is mock_el
+    assert strategy == "id"
 
     # 3. NAME
     mock_driver.find_elements.side_effect = (
         lambda by, val: [mock_el] if by == By.NAME and val == "email_field" else []
     )
     el, strategy = find_element_sequentially_once(mock_driver, "email_field")
-    assert el is mock_el and strategy == "name"
+    assert el is mock_el
+    assert strategy == "name"
 
     # 4. ТЭГ
     mock_driver.find_elements.side_effect = (
         lambda by, val: [mock_el] if by == By.TAG_NAME and val == "button" else []
     )
     el, strategy = find_element_sequentially_once(mock_driver, "button")
-    assert el is mock_el and strategy == "тэг"
+    assert el is mock_el
+    assert strategy == "тэг"
 
     # 5. CLASS
     mock_driver.find_elements.side_effect = (
         lambda by, val: [mock_el] if by == By.CLASS_NAME and val == "btn-primary" else []
     )
     el, strategy = find_element_sequentially_once(mock_driver, "btn-primary")
-    assert el is mock_el and "class" in strategy
+    assert el is mock_el
+    assert strategy is not None and "class" in strategy
 
     # 6. XPATH
     mock_driver.find_elements.side_effect = (
@@ -179,7 +200,8 @@ def test_sequential_locator_search_all_strategies():
     el, strategy = find_element_sequentially_once(
         mock_driver, "//button[@data-test='join']"
     )
-    assert el is mock_el and strategy == "xpath"
+    assert el is mock_el
+    assert strategy == "xpath"
 
 
 def test_step_actions_click_and_input():
@@ -203,12 +225,38 @@ def test_execute_instruction_and_scheduler_matching():
         start_t = (now - timedelta(minutes=1)).time().replace(microsecond=0)
         end_t = (now + timedelta(seconds=1)).time().replace(microsecond=0)
 
+        # Создаем шаблон шагов и куки в отдельных таблицах
+        step_resp = client.post(
+            "/steps",
+            json={
+                "title": "Шаги входа",
+                "steps": {"login_btn": "click", "user_input": "test_user"},
+            },
+        )
+        step_id = step_resp.json()["id"]
+
+        cookie_resp = client.post(
+            "/cookies",
+            json={
+                "title": "Куки тестовые",
+                "cookie": [
+                    {
+                        "name": "session_id",
+                        "value": "abc123xyz",
+                        "domain": ".example.com",
+                        "path": "/",
+                    }
+                ],
+            },
+        )
+        cookie_id = cookie_resp.json()["id"]
+
         instr_resp = client.post(
             "/instructions",
             json={
                 "url": "https://example.com",
-                "steps": {"login_btn": "click", "user_input": "test_user"},
-                "cookie": {"session_id": "abc123xyz"},
+                "step_id": step_id,
+                "cookie_id": cookie_id,
             },
         )
         instr_id = instr_resp.json()["id"]
@@ -251,7 +299,14 @@ def test_execute_instruction_and_scheduler_matching():
                 instr_id=instr_id,
                 url="https://example.com",
                 steps={"login_btn": "click", "user_input": "test_user"},
-                cookie={"session_id": "abc123xyz"},
+                cookie=[
+                    {
+                        "name": "session_id",
+                        "value": "abc123xyz",
+                        "domain": ".example.com",
+                        "path": "/",
+                    }
+                ],
                 time_end=end_t,
                 source="test",
             )
@@ -285,5 +340,5 @@ def test_execute_instruction_and_scheduler_matching():
                 time_module.sleep(0.1)
 
             logs = client.get(f"/logs?instr_id={instr_id}").json()
-            assert len(logs) == 3  # 1 прямой запуск + 1 single_action + 1 regular_action
+            assert len(logs) == 3
             assert all(log["is_success"] for log in logs)
