@@ -427,55 +427,6 @@ def create_chrome_driver() -> webdriver.Chrome:
     return webdriver.Chrome(options=options)
 
 
-def parse_cookie_file_to_selenium_list(content: str) -> List[Dict[str, str]]:
-    """
-    Парсит содержимое файла cookie.txt (разделенного табуляцией, как в s.py)
-    в список объектов Selenium [{'name', 'value', 'domain', 'path'}].
-    """
-    result: List[Dict[str, str]] = []
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        parts = stripped.split("\t")
-        if len(parts) >= 4:
-            name = parts[0].strip()
-            value = parts[1].strip()
-            domain = parts[2].strip()
-            path = parts[3].strip() or "/"
-            if name:
-                result.append(
-                    {
-                        "name": name,
-                        "value": value,
-                        "domain": domain,
-                        "path": path,
-                    }
-                )
-        elif len(parts) >= 2:
-            name = parts[0].strip()
-            value = parts[1].strip()
-            if name:
-                result.append(
-                    {
-                        "name": name,
-                        "value": value,
-                        "path": "/",
-                    }
-                )
-    return result
-
-
-def parse_cookie_file_content(content: str) -> Dict[str, str]:
-    """
-    Парсит содержимое файла формата cookie.txt в простой словарь {name: value}.
-    """
-    result: Dict[str, str] = {}
-    for item in parse_cookie_file_to_selenium_list(content):
-        result[item["name"]] = item["value"]
-    return result
-
-
 def execute_instruction_sync(
     instr_id: int,
     url: str,

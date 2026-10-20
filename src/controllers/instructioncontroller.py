@@ -19,7 +19,6 @@ from src.services.selenium_service import (
     execute_instruction_sync,
     launch_instruction_in_background,
 )
-from src.controllers.cookiecontroller import parse_local_cookie_file
 
 
 async def get_all_instructions():

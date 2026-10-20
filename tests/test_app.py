@@ -39,16 +39,31 @@ def setup_test_db():
 
 def test_crud_normalized_steps_cookies_and_instructions():
     with TestClient(app) as client:
-        # 1. Импорт cookie.txt сразу в таблицу cookie (формат массива объектов Selenium)
-        resp_import = client.post(
-            "/cookies/import-from-file?title=МТС+Линк+Основной"
-        )
-        assert resp_import.status_code == 201
-        cookie_record = resp_import.json()
+        # 1. Создание набора куки в таблице cookie (формат массива объектов Selenium)
+        cookie_payload = {
+            "title": "МТС Линк Основной",
+            "cookie": [
+                {
+                    "name": "_ga",
+                    "value": "GA1.2.118533033.1789973637",
+                    "domain": ".mts-link.ru",
+                    "path": "/",
+                },
+                {
+                    "name": "access",
+                    "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "domain": ".mts-link.ru",
+                    "path": "/",
+                },
+            ],
+        }
+        resp_cookie = client.post("/cookies", json=cookie_payload)
+        assert resp_cookie.status_code == 201
+        cookie_record = resp_cookie.json()
         cookie_id = cookie_record["id"]
         assert cookie_record["title"] == "МТС Линк Основной"
         assert isinstance(cookie_record["cookie"], list)
-        assert len(cookie_record["cookie"]) > 0
+        assert len(cookie_record["cookie"]) == 2
         assert "name" in cookie_record["cookie"][0]
         assert "domain" in cookie_record["cookie"][0]
 

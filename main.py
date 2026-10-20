@@ -12,7 +12,6 @@ from src.routes import (
     regular_action_router,
     single_action_router,
     log_router,
-    scheduler_router,
 )
 from src.services.scheduler_service import scheduler_service
 
@@ -63,7 +62,6 @@ app.include_router(instruction_router)
 app.include_router(regular_action_router)
 app.include_router(single_action_router)
 app.include_router(log_router)
-app.include_router(scheduler_router)
 
 
 @app.get("/", include_in_schema=False)

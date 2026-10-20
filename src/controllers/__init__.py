@@ -11,9 +11,6 @@ from src.controllers.cookiecontroller import (
     add_cookie,
     edit_cookie,
     remove_cookie,
-    parse_local_cookie_file,
-    parse_local_cookie_file_selenium,
-    create_cookie_from_file,
 )
 from src.controllers.instructioncontroller import (
     get_all_instructions,
