@@ -19,10 +19,8 @@ url = os.getenv("DATABASE_URL")
 if not url:
     raise ValueError("Нет DATABASE_URL в env")
 
-url = url.strip()
-echo_sql = os.getenv("SQL_ECHO", "false").lower() in ("1", "true", "yes")
+engine = create_engine(url, echo=False, pool_pre_ping=True)
 
-engine = create_engine(url, echo=echo_sql, pool_pre_ping=True)
 SessionLocal = sessionmaker(
     bind=engine,
     autoflush=False,
@@ -30,34 +28,17 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
-
 def init_db() -> None:
-    """
-    Создает все таблицы в базе данных.
-    Если в БД осталась старая схема таблицы instruction (без колонки step_id),
-    автоматически пересоздает таблицы под новую нормализованную схему.
-    """
     inspector = inspect(engine)
     if inspector.has_table("instruction"):
-        col_names = {col["name"] for col in inspector.get_columns("instruction")}
-        if "step_id" not in col_names:
-            logger.info(
-                "Обнаружена старая схема таблицы instruction (без step_id). Пересоздание таблиц..."
-            )
-            Base.metadata.drop_all(bind=engine)
-
+        logger.info("БД уже существует")
+        return 
     Base.metadata.create_all(bind=engine)
+    logger.info("БД создано")
 
-
-def get_db() -> Generator[Session, None, None]:
-    """Генератор сессии БД для зависимостей FastAPI."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
+def rm_db() -> None:
+    Base.metadata.drop_all(bind=engine)
 
 if __name__ == "__main__":
     init_db()
-    print("Таблицы успешно созданы в БД.")
+

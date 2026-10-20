@@ -9,7 +9,7 @@ class InstructionCreate(BaseModel):
     url: str = Field(
         ...,
         description="URL страницы, которую должен открыть Selenium",
-        examples=["https://my.mts-link.ru/j/120328607/24334684457"],
+        examples=["https://ссылка"],
     )
     step_id: int = Field(
         ...,

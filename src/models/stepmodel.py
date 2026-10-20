@@ -6,7 +6,7 @@ class StepCreate(BaseModel):
     title: Optional[str] = Field(
         default=None,
         description="Название шаблона шагов (необязательно)",
-        examples=["Вход в МТС Линк и отключение камеры"],
+        examples=["что - то"],
     )
     steps: dict[str, Any] = Field(
         ...,

@@ -8,31 +8,15 @@ class CookieCreate(BaseModel):
     title: Optional[str] = Field(
         default=None,
         description="Название набора куки (например, аккаунт или сервис)",
-        examples=["Аккаунт МТС Линк"],
+        examples=["Аккаунт во что нибудь"],
     )
     cookie: CookiePayload = Field(
         ...,
         description=(
             "Куки в формате массива объектов Selenium "
-            "[{'name': '...', 'value': '...', 'domain': '.mts-link.ru', 'path': '/'}] "
+            "[{'name': '...', 'value': '...', 'domain': '.link.ru', 'path': '/'}] "
             "или простого словаря {'name': 'value'}."
         ),
-        examples=[
-            [
-                {
-                    "name": "_ga",
-                    "value": "GA1.2.118533033.1789973637",
-                    "domain": ".mts-link.ru",
-                    "path": "/",
-                },
-                {
-                    "name": "access",
-                    "value": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
-                    "domain": ".mts-link.ru",
-                    "path": "/",
-                },
-            ]
-        ],
     )
 
 

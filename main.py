@@ -5,14 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from database.create_db import init_db
-from src.routes import (
-    step_router,
-    cookie_router,
-    instruction_router,
-    regular_action_router,
-    single_action_router,
-    log_router,
-)
+from src.routes import *
 from src.services.scheduler_service import scheduler_service
 
 logging.basicConfig(
@@ -26,7 +19,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     try:
         init_db()
-        logger.info("Таблицы базы данных проверены / созданы.")
     except Exception as exc:
         logger.warning("Не удалось инициализировать БД при старте: %s", exc)
 
@@ -38,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="OnIt — Автоматизация браузера по расписанию (Selenium + FastAPI + PostgreSQL)",
+    title="onit",
     description=(
         "Сервис управления шаблонами шагов (`step`), профилями куки (`cookie`), "
         "инструкциями (`instruction`), регулярным (`regular_action`) и "

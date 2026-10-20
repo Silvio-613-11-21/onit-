@@ -43,6 +43,7 @@ def get_active_sessions() -> List[Dict[str, Any]]:
         return result
 
 
+
 def stop_active_session(session_id: str) -> bool:
     """Сигнализирует активной сессии Selenium досрочно закрыть браузер."""
     with _active_sessions_lock:
@@ -407,6 +408,7 @@ def add_cookies_to_driver(
 def create_chrome_driver() -> webdriver.Chrome:
     """Создает и настраивает экземпляр Chrome WebDriver."""
     options = ChromeOptions()
+    # options.add_argument("--headless")
     headless = os.getenv("SELENIUM_HEADLESS", "false").lower() in ("1", "true", "yes")
     if headless:
         options.add_argument("--headless=new")
