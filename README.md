@@ -21,7 +21,7 @@
    - `id` — первичный ключ.
    - `title` — название профиля куки (например, `"Аккаунт МТС Линк"`).
    - `cookie` — данные куки в формате JSON:
-     - **Рекомендуемый формат (массив объектов Selenium)**:
+     - **Рекомендуемый формат (массив объектов Selenium / браузерных расширений)**:
        `[{"name": "access", "value": "...", "domain": ".mts-link.ru", "path": "/"}]`
      - Также поддерживается простой словарь `{"name": "value"}`.
 
@@ -48,7 +48,10 @@
 
 ### 1. Переменные окружения (`.env`)
 ```env
-DATABASE_URL=postgresql+psycopg2://postgres:admin@localhost:5432/postgres
+DATABASE_URL = postgresql+psycopg2://postgres:admin@localhost:5432/postgres
+TEST_DATABASE_URL = postgresql+psycopg2://postgres:admin@localhost:5432/postgre-test
+PORT=8080
+HOST=localhost
 ```
 
 ### 2. Установка зависимостей
@@ -58,8 +61,37 @@ pip install -r requirements.txt
 
 ### 3. Запуск сервера FastAPI
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+python main.py
+# или:
+uvicorn main:app --host 127.0.0.1 --port 8080 --reload
 ```
 
 ### 4. Swagger UI
-- `http://localhost:8000/docs` (или `http://localhost:8000/`)
+- `http://localhost:8080/docs` (или `http://localhost:8080/`)
+
+---
+
+## Тестирование
+
+Тесты разделены на отдельные модули в папке `tests/`:
+- `tests/conftest.py` — конфигурация тестового окружения и подключение к тестовой базе PostgreSQL (`TEST_DATABASE_URL`).
+- `tests/test_unit.py` — **5 unit-тестов** (изолированная проверка функций поиска локаторов, нормализации куки, экранирования XPath, действий Selenium и валидации Pydantic-моделей без обращения к БД).
+- `tests/test_integration.py` — **3 integration-теста** (проверка связки FastAPI + PostgreSQL `postgre-test` + планировщика + Selenium-исполнителя).
+
+### Запуск всех тестов (5 unit + 3 integration)
+В терминале из корневой папки проекта выполните:
+```bash
+pytest -v
+```
+
+### Запуск только Unit-тестов
+```bash
+pytest tests/test_unit.py -v
+```
+
+### Запуск только Integration-тестов (требуется запущенный PostgreSQL с базой `postgre-test`)
+```bash
+pytest tests/test_integration.py -v
+```
+
+*(Также любой из файлов `tests/test_unit.py` или `tests/test_integration.py` можно запустить напрямую кнопкой **▶ Run Python File** в VS Code).*
